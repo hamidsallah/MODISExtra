@@ -62,9 +62,10 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
     product <- getProduct(x=product,quiet=TRUE)
     # check if missing collection, else bilieve it
     if(is.null(collection))
-      product$CCC <- getCollection(product=product,collection="006",quiet=TRUE)[[1]]
+      collection <-"006"
+      product$CCC <- collection
     else
-      product$CCC <- sprintf("%03d",as.numeric(unlist("006")[1]))
+      product$CCC <- "006"
     #########
 
     if (product$SENSOR[1]=="MODIS")
@@ -108,13 +109,13 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
             ntiles <- length(tileID)
           }
 
-          onlineInfo <- .getStruc(product=product$PRODUCT[z],collection=product$CCC,server=opts$MODISserverOrder[1],begin=tLimits$begin,end=tLimits$end,wait=0)
+          onlineInfo <- .getStruc(product=product$PRODUCT[z],collection="006",server=opts$MODISserverOrder[1],begin=tLimits$begin,end=tLimits$end,wait=0)
           if(!is.na(onlineInfo$online))
           {
             if (!onlineInfo$online & length(opts$MODISserverOrder)==2)
             {
               cat(opts$MODISserverOrder[1]," seams not online, trying on '",opts$MODISserverOrder[2],"':\n",sep="")
-              onlineInfo <- .getStruc(product=product$PRODUCT[z],collection=product$CCC,begin=tLimits$begin,end=tLimits$end,wait=0,server=opts$MODISserverOrder[2])
+              onlineInfo <- .getStruc(product=product$PRODUCT[z],collection="006",begin=tLimits$begin,end=tLimits$end,wait=0,server=opts$MODISserverOrder[2])
             }
 
             if(is.null(onlineInfo$dates))
@@ -133,6 +134,7 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
           if (sum(us,na.rm=TRUE)>0)
           {
             suboutput <- list()
+            
             l=l+1
             dates[[l]] <- datedirs[us]
 
@@ -148,7 +150,7 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
               doy  <- as.integer(format(as.Date(dates[[l]][i,1]), "%j"))
               doy  <- sprintf("%03d",doy)
               mtr  <- rep(1,ntiles) # for file availability flaging
-              path <- .genString(x=strsplit(todo[u],"\\.")[[1]][1],collection=strsplit(todo[u],"\\.")[[1]][2],date=dates[[l]][i,1])
+              path <- .genString(x=strsplit(todo[u],"\\.")[[1]][1],collection="006","\\.")[[1]][2],date=dates[[l]][i,1])
 
               for(j in 1:ntiles)
               {
