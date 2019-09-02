@@ -29,7 +29,7 @@ runGdal <- function (product, collection = NULL, begin = NULL, end = NULL,
   opts <- .combineOptions(...)
 
   product <- getProduct(product, quiet = TRUE)
-  product$CCC <- getCollection(product, collection = collection)
+  product$CCC <- getCollection(product, collection = "006")
   tLimits <- transDate(begin = begin, end = end)
   dataFormat <- toupper(opts$dataFormat)
 
@@ -194,7 +194,7 @@ runGdal <- function (product, collection = NULL, begin = NULL, end = NULL,
       ftpdirs <- list()
       ftpdirs[[1]] <- as.Date(.getStruc(product = strsplit(todo[u],"\\.")[[1]][1], collection = strsplit(todo[u], "\\.")[[1]][2], begin = tLimits$begin, end = tLimits$end, server = opts$MODISserverOrder[1])$dates)
       prodname <- strsplit(todo[u], "\\.")[[1]][1]
-      coll <- strsplit(todo[u], "\\.")[[1]][2]
+      coll <- "006"
       avDates <- ftpdirs[[1]]
       avDates <- avDates[avDates != FALSE]
       avDates <- avDates[!is.na(avDates)]
