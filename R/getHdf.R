@@ -63,7 +63,7 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
     # check if missing collection, else bilieve it
     if(is.null(collection))
       collection <-"006"
-      product$CCC <- collection
+      product$CCC <- "006"
     else
       product$CCC <- "006"
     #########
