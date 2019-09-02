@@ -64,10 +64,7 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
     if(is.null(collection))
       collection <-"006"
       product$CCC <- "006"
-    else
-      product$CCC <- "006"
-    #########
-
+ 
     if (product$SENSOR[1]=="MODIS")
     {
       if (is.null(begin))
