@@ -1,274 +1,253 @@
-#' @title Process MODIS hdf with GDAL
-#' @description Download MODIS data from archive and process the files with GDAL. This function
-#' is basically copy-pasted from MODIS::runGdal, with a few bugs corrected. It uses also now the \code{GdalUtils}
-#' package, to simplify the code
-#' @usage runGdal(product, collection=NULL, begin=NULL, end=NULL, extent=NULL, tileH=NULL,
-#' tileV=NULL, buffer=0, SDSstring=NULL, job=NULL, checkIntegrity=TRUE, wait=0.5,
-#' quiet=FALSE,gdalPath = "",...)
-#' @inheritParams MODIS::runGdal
-#' @param gdalPath Path to the gdal binaries.
-#' @return See \code{\link[MODIS]{runGdal}} in the MODIS package
+#' @title Create or update a local, user-defined subset of the global online MODIS grid data pool
+#' @description See \code{\link[MODIS]{getHdf}} in the \code{MODIS} package, which this function is essentially a copy-paste. The only changes are related
+#' to the way MODIS files are downloaded which uses now the \code{rvest} package.
+#' @usage getHdf(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent=NULL,
+#' collection=NULL, HdfName, quiet=FALSE, wait=0.5, checkIntegrity=FALSE, ...)
+#' @inheritParams MODIS::getHdf
 #' @author Matteo Mattiuzzi and Antoine Stevens
+#' @return See \code{\link[MODIS]{getHdf}} in the MODIS package
 #' @examples
 #' \dontrun{
-#' # Get and extract NDVI MOD13A2 for June 2009
-#' runGdal(product="MOD13A2", begin = "2009.06.01", end = "2009.06.30",
-#'        tileH = 19, tileV = 5 ,
-#'        SDSstring =  "100000000000",job="H19V5",
-#'        gdalPath = "C:/OSGeo4W64/bin")
-#'}
-#'
+#' # Get NDVI MOD13A2 for June 2009
+#' getHdf(product="MOD13A2", begin = "2009.06.01", end = "2009.06.30",
+#'        tileH = 19, tileV = 5 ,job="H19V5")
+#' }
 #' @export
-runGdal <- function (product, collection = NULL, begin = NULL, end = NULL,
-                     extent = NULL, tileH = NULL, tileV = NULL, buffer = 0, SDSstring = NULL,
-                     job = NULL, checkIntegrity = TRUE, wait = 0.5, quiet = FALSE, gdalPath="",
-                     ...)
-{
+getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent=NULL,
+                   collection=NULL, HdfName, quiet=FALSE, wait=0.5, checkIntegrity=FALSE,...){
 
-  gdalUtils::gdal_setInstallation(search_path = gdalPath)
+  # Author: Matteo Mattiuzzi, Anja Klisch, matteo.mattiuzzi@boku.ac.at
+  # Date : July 2011
+  # Licence GPL v3
+
+  # product="MOD13Q1"; begin="2010001"; end="2010005"; tileH=NULL; tileV=NULL; extent=NULL; collection=NULL; quiet=FALSE; wait=0.5; checkIntegrity=FALSE; z=1;u=1
   opts <- .combineOptions(...)
 
-  product <- getProduct(product, quiet = TRUE)
-  collection <- "006"
-  product$CCC <-  collection
-  tLimits <- transDate(begin = begin, end = end)
-  dataFormat <- toupper(opts$dataFormat)
+  sturheit <- .stubborn(level=opts$stubbornness)
+  wait     <- as.numeric(wait)
 
-  if (dataFormat == "RAW BINARY")
-    stop("in argument dataFormat='raw binary', format not supported by GDAL (it is MRT specific) type: 'options(\"MODIS_gdalOutDriver\")' (column 'name') to list available inputs")
+  # TODO HdfName as regex
+  if (!missing(HdfName))
+  {
+    HdfName <- unlist(HdfName)
+    dates <- list()
 
-  if (dataFormat == "HDF-EOS")
-    dataFormat <- "HDF4IMAGE"
+    for (i in seq_along(HdfName))
+    {
+      HdfName[i]     <- basename(HdfName[i]) # separate name from path
+      path           <- .genString(HdfName[i],...)
+      path$localPath <- .setPath(path$localPath)
 
-  if (dataFormat == "GEOTIFF")
-    dataFormat <- "GTIFF"
-
-  if (is.null(opts$gdalOutDriver)) {
-    opts$gdalOutDriver <- .gdalWriteDriver()
-    options(MODIS_gdalOutDriver = opts$gdalOutDriver)
-  }
-
-  if (dataFormat %in% toupper(opts$gdalOutDriver$name)) {
-    dataFormat <- grep(opts$gdalOutDriver$name, pattern = paste("^", dataFormat, "$", sep = ""), ignore.case = TRUE, value = TRUE)
-    of <- dataFormat
-    extension <-.getExtension(dataFormat)
-  }
-  else {
-    stop("in argument dataFormat='", opts$dataFormat, "', format not supported by GDAL type: 'gdalWriteDriver()' (column 'name') to list available inputs")
-  }
-
-  # Set outProj
-  if (product$TYPE[1] == "Tile" | (all(!is.null(extent) | !is.null(tileH) & !is.null(tileV)) & product$TYPE[1] == "CMG")) {
-    if(class(extent)%in%c("RasterLayer","RasterBrick","RasterStack"))
-      if(is.na(projection(extent)))
-        stop("Provide a projection to the raster object")
-    requireNamespace("rgeos")
-    extent <- getTile(extent = extent, tileH = tileH, tileV = tileV, buffer = buffer)
-  }
-  else {
-    extent <- NULL
-  }
-
-  t_srs <- NULL
-  cat("########################\n")
-  if (!is.null(extent$target$outProj)) {
-    outProj <- .checkOutProj(extent$target$outProj, tool = "GDAL")
-    cat("outProj          = ", outProj, " (Specified by raster*/spatial* object)\n")
-  }
-  else {
-    outProj <- .checkOutProj(opts$outProj, tool = "GDAL")
-    cat("outProj          = ", outProj, "\n")
-  }
-  if (outProj == "asIn") {
-    if (product$SENSOR[1] == "MODIS") {
-      if (product$TYPE[1] == "Tile") {
-        outProj <- "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"
+      if (!file.exists(paste0(path$localPath,"/",HdfName[i])))
+      {
+        .ModisFileDownloader(HdfName[i],quiet=quiet,...)
       }
-      else {
-        outProj <- "+proj=longlat +ellps=clrk66 +no_defs"
+
+      if(checkIntegrity)
+      {
+        .doCheckIntegrity(HdfName[i], quiet=quiet,...)
       }
+      dates[[i]] <- paste0(path$local,"/",HdfName[i])
     }
-    else if (product$SENSOR[1] == "SRTM") {
-      outProj <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
-    }
-  }
-  t_srs <- outProj
+    return(invisible(unlist(dates)))
 
-  # Set pixel size
-  if (!is.null(extent$target$pixelSize)) {
-    pixelSize <- extent$target$pixelSize
-    cat("pixelSize        = ", pixelSize, " (Specified by raster* object)\n")
-  }
-  else {
-    pixelSize <- opts$pixelSize
-    cat("pixelSize        = ", pixelSize, "\n")
-  }
-  tr <- NULL
-  if (pixelSize[1] != "asIn") {
-    if (length(pixelSize) == 1) {
-      tr <- c(pixelSize, pixelSize)
-    }
-    else {
-      tr <- pixelSize
-    }
-  }
+  } else
+  { # if HdfName isn't provided:
 
-  # set resampling type
-  opts$resamplingType <- .checkResamplingType(opts$resamplingType, tool = "gdal")
-  cat("resamplingType   = ", opts$resamplingType, "\n")
-  r <- opts$resamplingType
+    if (missing(product))
+      stop("Please provide the supported-'product'. See in: 'getProduct()'")
 
-  # set source projection
-  if (product$SENSOR[1] == "MODIS") {
-    if (product$TYPE[1] == "Tile") {
-      s_srs <- "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"
-    }
-    else {
-      s_srs <- "+proj=longlat +ellps=clrk66 +no_defs"
-    }
-  }
-  else if (product$SENSOR[1] == "SRTM") {
-    s_srs <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
-  }
+    #######
+    # check product
+    product <- getProduct(x=product,quiet=TRUE)
+    # check if missing collection, else bilieve it
+    if(is.null(collection))
+      product$CCC <- getCollection(product=product,collection=collection,quiet=TRUE)[[1]]
+    else
+      product$CCC <- sprintf("%03d",as.numeric(unlist(collection)[1]))
+    #########
 
-  # Set extent
-  te <- NULL
-  if (!is.null(extent$target$extent)) {
-    if (is.null(extent$target$outProj)) {
-      rx <- raster(extent$target$extent, crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
-      rx <- projectExtent(rx, outProj)
-      rx <- extent(rx)
-    }
-    else {
-      rx <- extent$target$extent
-    }
-    te <- c(rx@xmin, rx@ymin, rx@xmax, rx@ymax)
-  }
-  if (is.null(extent$target)) {
-    if (!is.null(extent$extent)) {
-      rx <- raster(extent$extent, crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
-      rx <- projectExtent(rx, outProj)
-      rx <- extent(rx)
-      te <- c(rx@xmin, rx@ymin, rx@xmax, rx@ymax)
-    }
-  }
+    if (product$SENSOR[1]=="MODIS")
+    {
+      if (is.null(begin))
+        cat("No begin(-date) set, getting data from the beginning\n")
+      if (is.null(end))
+        cat("No end(-date) set, getting data up to the most actual\n")
 
-  # Set misc options
-  if (is.null(opts$blockSize))
-    bs <- NULL
-  else
-    bs <- list(paste0("BLOCKYSIZE=", as.integer(opts$blockSize)))
-
-  if (is.null(opts$compression)|isTRUE(opts$compression))
-    cp <- list("compress=lzw","predictor=2")
-  else
-    cp <- NULL
-
-  bscp <- c(bs,cp)
-
-  if (quiet)
-    q <- T
-  else
-    q <- F
-  # Download, extract and project
-  for (z in seq_along(product$PRODUCT)) {
-    todo <- paste(product$PRODUCT[z], ".", product$CCC[[product$PRODUCT[z]]], sep = "")
-    if (z == 1) {
-      if (is.null(job)) {
-        job <- paste0(todo[1], "_", format(Sys.time(), "%Y%m%d%H%M%S"))
-        cat("Output directory = ", paste0(normalizePath(opts$outDirPath, "/", mustWork = FALSE), "/", job), " (no 'job' name specified, generated (date/time based))\n")
-      } else {
-        cat("Output Directory = ", paste0(normalizePath(opts$outDirPath, "/", mustWork = FALSE), "/", job), "\n")
-      }
-      cat("########################\n")
-      outDir <- file.path(opts$outDirPath, job, fsep = "/")
-      dir.create(outDir, showWarnings = FALSE, recursive = TRUE)
+      # tranform dates
+      tLimits <- transDate(begin=begin,end=end)
     }
-    if(!is.null(opts$auxPath)){
-      # create dir if necessary
-      dir.create(opts$auxPath,showWarnings = F)
 
-    } else {
-      stop("Specify an auxPath directory. See .combineOptions()")
-    }
-    for (u in seq_along(todo)) {
-      ftpdirs <- list()
-      ftpdirs[[1]] <- as.Date(.getStruc(product = strsplit(todo[u],"\\.")[[1]][1], collection =c(006), begin = tLimits$begin, end = tLimits$end, server = opts$MODISserverOrder[1])$dates)
-      prodname <- strsplit(todo[u], "\\.")[[1]][1]
-      coll <- "006"
-      avDates <- ftpdirs[[1]]
-      avDates <- avDates[avDates != FALSE]
-      avDates <- avDates[!is.na(avDates)]
-      sel <- as.Date(avDates)
-      us <- sel >= tLimits$begin & sel <= tLimits$end
-      if (sum(us, na.rm = TRUE) > 0) {
-        avDates <- avDates[us]
-        for (l in seq_along(avDates)) {
-          # download files
-          files <- unlist(getHdf(product = prodname,
-                                 collection = coll, begin = avDates[l], end = avDates[l],
-                                 tileH = extent$tileH, tileV = extent$tileV,
-                                 checkIntegrity = checkIntegrity, stubbornness = opts$stubbornness,
-                                 MODISserverOrder = opts$MODISserverOrder))
-          files <- files[basename(files) != "NA"]
-          if (length(files) > 0) {
-            w <- getOption("warn")
-            options(warn = -1)
-            SDS <- list()
-            for (z in seq_along(files)) {
-              SDS[[z]] <- getSds(HdfName = files[z], SDSstring = SDSstring, method = "GDAL")
+    dates  <- list()
+    output <- list() # path info for the invisible output
+    l=0
+    for(z in seq_along(product$PRODUCT))
+    { # Platforms MOD/MYD
+
+      if (product$TYPE[z]=="Swath")
+      {
+        cat("'Swath'-products not supported, jumping to the next.\n")
+      } else
+      {
+        todo <- paste0(product$PRODUCT[z],".",product$CCC)
+        for (u in seq_along(todo))
+        {
+          # tileID
+          if (product$TYPE[z]=="CMG")
+          {
+            tileID="GLOBAL"
+            ntiles=1
+          } else
+          {
+            if (!is.null(tileH) & !is.null(tileV))
+              extent <- getTile(tileH=tileH,tileV=tileV)
+            else
+              extent <- getTile(extent=extent)
+
+            tileID <- extent$tile
+            ntiles <- length(tileID)
+          }
+
+          onlineInfo <- .getStruc(product=product$PRODUCT[z],collection=product$CCC,server=opts$MODISserverOrder[1],begin=tLimits$begin,end=tLimits$end,wait=0)
+          if(!is.na(onlineInfo$online))
+          {
+            if (!onlineInfo$online & length(opts$MODISserverOrder)==2)
+            {
+              cat(opts$MODISserverOrder[1]," seams not online, trying on '",opts$MODISserverOrder[2],"':\n",sep="")
+              onlineInfo <- .getStruc(product=product$PRODUCT[z],collection=product$CCC,begin=tLimits$begin,end=tLimits$end,wait=0,server=opts$MODISserverOrder[2])
             }
-            options(warn = w)
-            if (!exists("NAS")) {
-              NAS <- .getNa(SDS[[1]]$SDS4gdal)
-            }
-            for (i in seq_along(SDS[[1]]$SDSnames)) {
-              outname <- paste0(paste0(strsplit(basename(files[1]), "\\.")[[1]][1:2], collapse = "."), ".", gsub(SDS[[1]]$SDSnames[i], pattern = " ", replacement = "_"), extension)
-              gdalSDS <- sapply(SDS, function(x) {x$SDS4gdal[i]})
-              # get no data values
-              naID <- which(SDS[[1]]$SDSnames == names(NAS)[i])
-              if (length(naID) > 0) {
-                srcnodata <- as.character(NAS[[naID]]);dstnodata <- as.character(NAS[[naID]])
-              } else {
-                srcnodata <- NULL ; dstnodata <- NULL
+
+            if(is.null(onlineInfo$dates))
+              stop("Could not connect to server(s), and no data is available offline!\n")
+
+            if(!is.na(onlineInfo$online))
+              if(!onlineInfo$online)
+                cat("Could not connect to server(s), data download disabled!\n")
+          }
+
+          datedirs <- as.Date(onlineInfo$dates)
+          datedirs <- datedirs[!is.na(datedirs)]
+          sel <- datedirs
+          us  <- sel >= tLimits$begin & sel <= tLimits$end
+
+          if (sum(us,na.rm=TRUE)>0)
+          {
+            suboutput <- list()
+            l=l+1
+            dates[[l]] <- datedirs[us]
+
+            dates[[l]] <- cbind(as.character(dates[[l]]),matrix(rep(NA, length(dates[[l]])*ntiles),ncol=ntiles,nrow=length(dates[[l]])))
+            colnames(dates[[l]]) <- c("date",tileID)
+
+            for (i in 1:nrow(dates[[l]]))
+            { # i=1
+              #cat(dates[[l]][i,1],"\n")
+              #flush.console()
+
+              year <- format(as.Date(dates[[l]][i,1]), "%Y")
+              doy  <- as.integer(format(as.Date(dates[[l]][i,1]), "%j"))
+              doy  <- sprintf("%03d",doy)
+              mtr  <- rep(1,ntiles) # for file availability flaging
+              path <- .genString(x=strsplit(todo[u],"\\.")[[1]][1],collection=strsplit(todo[u],"\\.")[[1]][2],date=dates[[l]][i,1])
+
+              for(j in 1:ntiles)
+              {
+                dates[[l]][i,j+1] <- paste0(strsplit(todo[u],"\\.")[[1]][1],".",paste0("A",year,doy),".",if (tileID[j]!="GLOBAL") {paste0(tileID[j],".")},strsplit(todo[u],"\\.")[[1]][2],".*.hdf$") # create pattern
+
+                # print(dir(path$localPath,pattern=dates[[l]][i,j+1]))
+                if (length(dir(path$localPath,pattern=dates[[l]][i,j+1]))>0)
+                { # if available locally
+                  HDF <- dir(path$localPath,pattern=dates[[l]][i,j+1]) # extract HDF file
+
+                  if (length(HDF)>1)
+                  { # in very recent files sometimes there is more than 1 file/tile/date if so get the most recent processing date
+                    select <- list()
+                    for (d in 1:length(HDF))
+                    {
+                      select[[d]]<- strsplit(HDF[d],"\\.")[[1]][5]
+                    }
+                    HDF <- HDF[which.max(unlist(select))]
+                  }
+                  dates[[l]][i,j+1] <- HDF
+                  mtr[j] <- 0
+                }
               }
 
-              if (length(grep(todo, pattern = "M.D13C2\\.005")) > 0) {
-                if (i == 1) {
-                  cat("\n###############\nM.D13C2.005 is likely to have a problem in metadata extent information, it is corrected on the fly\n###############\n")
+              if (sum(mtr)!=0 & (onlineInfo$online | is.na(onlineInfo$online)))
+              { # if one or more of the tiles in the given date is missing, its necessary to go online
+
+                if(exists("ftpfiles"))
+                {
+                  rm(ftpfiles)
                 }
-                ranpat <- .makeRandomString(length = 21)
-                randomName <- paste0(outDir, "/deleteMe_", ranpat, ".tif")
-                on.exit(unlink(list.files(path = outDir, pattern = ranpat, full.names = TRUE), recursive = TRUE))
-                for (ix in seq_along(gdalSDS)) {
-                  gdalUtils::gdal_translate(src_dataset = gdalSDS[ix],dst_dataset = randomName[ix],a_nodata=NAS[[naID]],a_ullr = c(-180,90,180,-90))
+
+              for (g in 1:sturheit)
+                { # get list of FILES in remote dir
+                  # server <- names(path$remotePath)[g%%length(path$remotePath)+1]
+                  ftpfiles <- filesUrl(path$remotePath[[which(names(path$remotePath)==onlineInfo$source)]])
+                  if(length(ftpfiles))
+                    break
+
+                  Sys.sleep(wait)
                 }
-                gdalSDS <- randomName
+                if(!length(ftpfiles))
+                {
+                  stop("Problems with online connections try a little later")
+                }
+                if (ftpfiles[1] != "total 0")
+                {
+                  ftpfiles <- unlist(lapply(strsplit(ftpfiles," "),function(x){x[length(x)]})) # found empty dir!
+
+                  for(j in 1:ntiles)
+                  { # j=1
+                    if(mtr[j]==1)
+                    { # if tile is missing get it
+                      onFtp <- grep(ftpfiles,pattern=dates[[l]][i,j+1],value=TRUE)
+                      HDF   <- grep(onFtp,pattern=".hdf$",value=TRUE)
+                      if(length(HDF)>0)
+                      {
+                        if (length(HDF)>1)
+                        { # in very recent files sometimes there is more than 1 file/tile/date if so get the last
+                          select <- list()
+                          for (d in seq_along(HDF))
+                          {
+                            select[[d]] <- strsplit(HDF[d],"\\.")[[1]][5]
+                          }
+                          HDF <- HDF[which.max(unlist(select))]
+                        }
+
+                        dates[[l]][i,j+1] <- HDF
+
+                        hdf <- .ModisFileDownloader(HDF, wait=wait, quiet=quiet)
+                        mtr[j] <- hdf
+
+                      } else
+                      {
+                        dates[[l]][i,j+1] <- NA
+                      }
+                    }
+                  }
+                } else
+                {
+                  dates[[l]][i,(j+1):ncol(dates[[l]])] <- NA
+                } # on ftp is possible to find empty folders!
               }
-              # extract and project
-              ifile <-gdalSDS
-              ofile <- paste0(outDir, "/", outname)
-              args <- list(srcfile = ifile, dstfile = ofile, s_srs = s_srs, t_srs = t_srs,
-                           of = of, te = te, tr = tr,
-                           co = bscp, r = r, q = q,
-                           srcnodata = srcnodata, dstnodata = dstnodata,
-                           overwrite = TRUE, output_Raster = FALSE,multi = TRUE) # arguments to gdalwarp
-              #remove args not used
-              args <- args[!sapply(args,is.null)]
-              # perform warping
-              do.call(gdalUtils::gdalwarp,args)
+              if(checkIntegrity)
+              { # after each 'i' do the sizeCheck
+                isIn <- .doCheckIntegrity(paste0(path$localPath,dates[[l]][i,-1]), wait=wait, quiet=quiet,...)
+              }
+              suboutput[[i]] <- paste0(path$localPath,dates[[l]][i,-1])
+            } # end i
 
-              if (length(grep(todo, pattern = "M.D13C2\\.005")) > 0)
-                unlink(list.files(path = outDir, pattern = ranpat, full.names = TRUE), recursive = TRUE)
-
-            }
-          } else {
-            warning(paste0("No file found for date: ", avDates[l]))
+            output[[l]] <-  as.character(unlist(suboutput))
+            names(output)[l] <- todo[u]
+          } else
+          {
+            cat(paste0("No files on ftp in date range for: ",todo[u],"\n\n"))
           }
         }
-      } else {
-        warning("No product found within the date range")
       }
     }
+    return(invisible(output))
   }
-}
+} ## END: FTP vs ARC check and download
