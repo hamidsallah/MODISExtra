@@ -62,9 +62,9 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
     product <- getProduct(x=product,quiet=TRUE)
     # check if missing collection, else bilieve it
     if(is.null(collection))
-      product$CCC <- getCollection(product=product,collection=collection,quiet=TRUE)[[1]]
+      product$CCC <- getCollection(product=product,collection="006",quiet=TRUE)[[1]]
     else
-      product$CCC <- sprintf("%03d",as.numeric(unlist(collection)[1]))
+      product$CCC <- sprintf("%03d",as.numeric(unlist("006")[1]))
     #########
 
     if (product$SENSOR[1]=="MODIS")
