@@ -106,7 +106,7 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
             ntiles <- length(tileID)
           }
 
-          onlineInfo <- .getStruc(product=product$PRODUCT[z],collection="006",server=opts$MODISserverOrder[1],begin=tLimits$begin,end=tLimits$end,wait=0)
+          onlineInfo <- .getStruc(product=product$PRODUCT[z],collection=collection,server=opts$MODISserverOrder[1],begin=tLimits$begin,end=tLimits$end,wait=0)
           if(!is.na(onlineInfo$online))
           {
             if (!onlineInfo$online & length(opts$MODISserverOrder)==2)
