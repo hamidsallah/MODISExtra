@@ -193,7 +193,7 @@ runGdal <- function (product, collection = NULL, begin = NULL, end = NULL,
     }
     for (u in seq_along(todo)) {
       ftpdirs <- list()
-      ftpdirs[[1]] <- as.Date(.getStruc(product = strsplit(todo[u],"\\.")[[1]][1], collection ="006", "\\.")[[1]][2], begin = tLimits$begin, end = tLimits$end, server = opts$MODISserverOrder[1])$dates)
+      ftpdirs[[1]] <- as.Date(.getStruc(product = strsplit(todo[u],"\\.")[[1]][1], collection =c(006), begin = tLimits$begin, end = tLimits$end, server = opts$MODISserverOrder[1])$dates)
       prodname <- strsplit(todo[u], "\\.")[[1]][1]
       coll <- "006"
       avDates <- ftpdirs[[1]]
