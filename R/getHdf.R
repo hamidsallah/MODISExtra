@@ -147,7 +147,7 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
               doy  <- as.integer(format(as.Date(dates[[l]][i,1]), "%j"))
               doy  <- sprintf("%03d",doy)
               mtr  <- rep(1,ntiles) # for file availability flaging
-              path <- .genString(x=strsplit(todo[u],"\\.")[[1]][1],collection="006","\\.")[[1]][2],date=dates[[l]][i,1])
+              path <- .genString(x=strsplit(todo[u],"\\.")[[1]][1],collection=c(007),date=dates[[l]][i,1])
 
               for(j in 1:ntiles)
               {
