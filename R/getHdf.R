@@ -62,7 +62,7 @@ getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent
     product <- getProduct(x=product,quiet=TRUE)
     # check if missing collection, else bilieve it
     if(is.null(collection))
-      product$CCC <- getCollection(product=product,collection=collection,quiet=TRUE)[[1]]
+      product$CCC <- getCollection(product=product,collection=collection,forceCheck=TRUE, as="006", quiet=TRUE)[[1]]
     else
       product$CCC <- sprintf("%03d",as.numeric(unlist(collection)[1]))
     #########
