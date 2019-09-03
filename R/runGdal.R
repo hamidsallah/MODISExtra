@@ -29,7 +29,7 @@ runGdal <- function (product, collection = NULL, begin = NULL, end = NULL,
   opts <- .combineOptions(...)
 
   product <- getProduct(product, quiet = TRUE)
-  product$CCC <- getCollection(product, collection = collection)
+  product$CCC <- getCollection(product, collection = collection, forceCheck=TRUE, as="006")
   tLimits <- transDate(begin = begin, end = end)
   dataFormat <- toupper(opts$dataFormat)
 
