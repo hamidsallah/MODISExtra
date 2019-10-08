@@ -19,7 +19,7 @@
 #'}
 #'
 #' @export
-runGdal <- function (product, collection = NULL, begin = NULL, end = NULL,
+runGdal <- function (product, collection = "006", begin = NULL, end = NULL,
                      extent = NULL, tileH = NULL, tileV = NULL, buffer = 0, SDSstring = NULL,
                      job = NULL, checkIntegrity = TRUE, wait = 0.5, quiet = FALSE, gdalPath="",
                      ...)
