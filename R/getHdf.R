@@ -14,7 +14,7 @@
 #' }
 #' @export
 getHdf <- function(product, begin=NULL, end=NULL, tileH=NULL, tileV=NULL, extent=NULL,
-                   collection=NULL, HdfName, quiet=FALSE, wait=0.5, checkIntegrity=FALSE,...){
+                   collection="006", HdfName, quiet=FALSE, wait=0.5, checkIntegrity=FALSE,...){
 
   # Author: Matteo Mattiuzzi, Anja Klisch, matteo.mattiuzzi@boku.ac.at
   # Date : July 2011
